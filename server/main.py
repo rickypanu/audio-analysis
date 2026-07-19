@@ -16,3 +16,14 @@ app.add_middleware(
 # Include our routes
 app.include_router(router)
 
+@app.get("/")
+async def root():
+    return {"message": "Welcome to the Audio Analyser"}
+
+
+@app.api_route("/health", methods=["GET", "HEAD"], status_code=200, tags=["Health"])
+def health_check():
+    """
+    Endpoint for UptimeRobot to ping and keep the server awake.
+    """
+    return {"status": "ok", "message": "Server is active and awake"}
