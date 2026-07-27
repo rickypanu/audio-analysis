@@ -9,22 +9,19 @@ from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types, errors
-from pymongo import MongoClient
+import motor.motor_asyncio
 
 router = APIRouter()
 load_dotenv()
 
-# --- 1. MongoDB Setup ---
+# --- 1. MongoDB Setup (Using Motor AsyncIO) ---
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
 DB_NAME = os.getenv("DB_NAME", "audio_analyzer_db")
 
-try:
-    mongo_client = MongoClient(MONGO_URI)
-    db = mongo_client[DB_NAME]
-    history_collection = db["analysis_history"]
-    print(f"Connected to MongoDB database: {DB_NAME}")
-except Exception as e:
-    print(f"Warning: MongoDB connection failed: {e}")
+mongo_client = motor.motor_asyncio.AsyncIOMotorClient(MONGO_URI)
+db = mongo_client[DB_NAME]
+# Updated collection name to match history route: "history"
+history_collection = db["history"]
 
 # --- 2. Local Storage & Gemini Client Setup ---
 UPLOAD_DIR = "temp_audio_files"
@@ -58,10 +55,9 @@ async def analyze_audio(file: UploadFile = File(...)):
 
         await asyncio.to_thread(save_file)
 
-        # Step B: Upload file to Gemini File API
+        # Step B: Upload file to Gemini File API (Using Async Gemini SDK)
         print(f"Uploading {file.filename} to Gemini...")
-        uploaded_file = await asyncio.to_thread(
-            gemini_client.files.upload, 
+        uploaded_file = await gemini_client.aio.files.upload(
             file=file_location
         )
 
@@ -73,7 +69,7 @@ async def analyze_audio(file: UploadFile = File(...)):
         """
 
         # Step C: Generate content with dynamic model fallback
-        models_to_try = ["gemini-3.5-flash","gemini-2.5-flash", "gemini-2.0-flash"]
+        models_to_try = ["gemini-2.5-flash", "gemini-2.0-flash"]
         response = None
         last_exception = None
 
@@ -81,9 +77,7 @@ async def analyze_audio(file: UploadFile = File(...)):
             try:
                 print(f"Analyzing audio with {model_name}...")
                 
-                # Running blocking SDK call in background thread
-                response = await asyncio.to_thread(
-                    gemini_client.models.generate_content,
+                response = await gemini_client.aio.models.generate_content(
                     model=model_name,
                     contents=[uploaded_file, prompt],
                     config=types.GenerateContentConfig(
@@ -112,7 +106,7 @@ async def analyze_audio(file: UploadFile = File(...)):
         # Step D: Parse structured JSON result
         analysis_data = json.loads(response.text)
 
-        # Step E: Persist result to MongoDB
+        # Step E: Persist result directly to MongoDB "history" collection
         record_doc = {
             "fileName": file.filename,
             "contentType": file.content_type,
@@ -128,10 +122,8 @@ async def analyze_audio(file: UploadFile = File(...)):
             },
         }
 
-        inserted_result = await asyncio.to_thread(
-            history_collection.insert_one, 
-            record_doc
-        )
+        # Native Motor async insert
+        inserted_result = await history_collection.insert_one(record_doc)
         record_id = str(inserted_result.inserted_id)
 
         return {
@@ -157,8 +149,7 @@ async def analyze_audio(file: UploadFile = File(...)):
 
         if uploaded_file:
             try:
-                await asyncio.to_thread(
-                    gemini_client.files.delete, 
+                await gemini_client.aio.files.delete(
                     name=uploaded_file.name
                 )
                 print("Remote Gemini file deleted successfully.")

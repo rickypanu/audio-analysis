@@ -1,6 +1,6 @@
 import os
 from datetime import datetime, timezone
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field, ConfigDict
@@ -13,14 +13,12 @@ router = APIRouter()
 # ------------------------------------------------------------------
 # 1. Database Connection Setup
 # ------------------------------------------------------------------
-# Replace with your actual Mongo URI or pull from environment variables
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
 DB_NAME = os.getenv("DB_NAME", "audio_analyzer_db")
 
 client = motor.motor_asyncio.AsyncIOMotorClient(MONGO_URI)
 db = client[DB_NAME]
 
-# Explicitly define history_collection so it's globally available to routes
 history_collection = db["history"]
 
 
@@ -58,16 +56,15 @@ class HistoryRecord(BaseModel):
     )
 
 
-from pydantic import BaseModel
-from typing import Dict, Any, Optional
-
-# Schema for incoming manual history record requests
 class ManualHistoryEntry(BaseModel):
     fileName: str
     contentType: Optional[str] = "audio/mpeg"
     data: Dict[str, Any]
 
 
+# ------------------------------------------------------------------
+# 3. History Endpoints
+# ------------------------------------------------------------------
 @router.post("/api/history")
 async def create_history_record(entry: ManualHistoryEntry):
     """Manually creates and saves a new analysis record in MongoDB."""
@@ -79,7 +76,6 @@ async def create_history_record(entry: ManualHistoryEntry):
             "data": entry.data
         }
 
-        # Insert into MongoDB
         result = await history_collection.insert_one(new_record)
 
         return {
@@ -93,23 +89,18 @@ async def create_history_record(entry: ManualHistoryEntry):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create history entry: {str(e)}"
         )
-        
 
-# ------------------------------------------------------------------
-# 3. History Endpoints
-# ------------------------------------------------------------------
+
 @router.get("/api/history")
 async def get_history():
     """Retrieves history records from MongoDB with complete fallback sanitization."""
     try:
-        # Querying history_collection safely
         records = await history_collection.find().sort("timestamp", -1).to_list(100)
         clean_history = []
 
         for doc in records:
             doc_id = str(doc.get("_id", ""))
             
-            # Extract nested fields defensively regardless of payload shape
             data_raw = doc.get("data", {})
             file_info_raw = doc.get("file_info", {}) or data_raw.get("file_info", {})
             analysis_raw = doc.get("analysis", {}) or data_raw.get("analysis", {})
