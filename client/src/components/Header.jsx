@@ -103,7 +103,7 @@ export default function Header({
         {/* Subtle Greeting Tag */}
         <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-pink-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-medium tracking-wide shadow-sm">
           <Users size={12} className="text-indigo-400" />
-          <span>{greeting}, time to sharpen our skills together</span>
+          <span>{greeting}</span>
         </div>
 
         {/* Main Title */}
