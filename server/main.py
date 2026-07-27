@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from routes.analysis import router as analysis_router
 from routes.login import router as auth_router
 from routes.history import router as history_router
+
 app = FastAPI(title="Audio Analysis API")
 
 app.add_middleware(
