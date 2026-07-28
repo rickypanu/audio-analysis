@@ -101,3 +101,31 @@ export async function deleteHistoryApi(historyId) {
 
   return await response.json();
 }
+
+export const loginWithFace = async (imageBase64, gestureCompleted = true) => {
+  const response = await fetch(`${API_BASE_URL}/api/login/face`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      image_base64: imageBase64,
+      gesture_completed: gestureCompleted,
+    }),
+  });
+
+  const text = await response.text();
+  let data;
+
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch (err) {
+    throw new Error('Server returned an invalid non-JSON response.');
+  }
+
+  if (!response.ok) {
+    throw new Error(data.detail || data.message || `Request failed with status ${response.status}`);
+  }
+
+  return data;
+};
