@@ -6,3 +6,10 @@ python-dotenv
 motor
 pymongo
 pydantic
+opencv-python 
+pillow
+slowapi
+numpy
+onnxruntime
+insightface
+opencv-python-headless
