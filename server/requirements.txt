@@ -10,5 +10,7 @@ pillow
 slowapi
 numpy
 onnxruntime
-insightface
 opencv-python-headless
+albumentations
+scikit-image
+--no-deps insightface
