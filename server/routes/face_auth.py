@@ -1,9 +1,10 @@
 import base64
 import os
+from contextlib import asynccontextmanager
 import cv2
 import numpy as np
 from dotenv import load_dotenv
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Request, FastAPI, status
 from pydantic import BaseModel
 import insightface
 from insightface.app import FaceAnalysis
@@ -15,9 +16,27 @@ from slowapi.util import get_remote_address
 
 load_dotenv()
 
-router = APIRouter()
+# Global variable for face analysis model
+face_app = None
+SIMILARITY_THRESHOLD = 0.48
 
-# Initialize Rate Limiter
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager replacing deprecated @router.on_event("startup")."""
+    global face_app
+    try:
+        face_app = FaceAnalysis(name="buffalo_s", providers=["CPUExecutionProvider"])
+        face_app.prepare(ctx_id=0, det_size=(640, 640))
+        print("✅ ONNX InsightFace model loaded successfully.")
+    except Exception as e:
+        print(f"⚠️ Failed to load InsightFace model: {e}")
+    yield
+    # Cleanup logic (if needed) on shutdown goes here
+
+
+# Initialize router and rate limiter
+router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
 
 # MongoDB Connection Setup
@@ -38,22 +57,6 @@ class LoginResponse(BaseModel):
     success: bool
     message: str
     user: str
-
-
-# Global state
-face_app = None
-SIMILARITY_THRESHOLD = 0.48
-
-
-@router.on_event("startup")
-def startup_event():
-    global face_app
-    try:
-        face_app = FaceAnalysis(name="buffalo_s", providers=["CPUExecutionProvider"])
-        face_app.prepare(ctx_id=0, det_size=(640, 640))
-        print("✅ ONNX InsightFace model loaded successfully.")
-    except Exception as e:
-        print(f"⚠️ Failed to load InsightFace model: {e}")
 
 
 def cosine_distance(embedding1, embedding2):
@@ -104,6 +107,12 @@ async def login_with_face(request: Request, payload: FaceLoginRequest):
             )
 
         # 4. Generate embedding vector using InsightFace
+        if face_app is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Face model is not initialized.",
+            )
+
         faces = face_app.get(img)
         if len(faces) == 0:
             raise HTTPException(

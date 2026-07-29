@@ -12,5 +12,5 @@ numpy
 onnxruntime
 albumentations
 scikit-image
-opencv-python-headless
+opencv-python
 insightface
