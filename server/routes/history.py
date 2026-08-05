@@ -62,9 +62,6 @@ class ManualHistoryEntry(BaseModel):
     data: Dict[str, Any]
 
 
-# ------------------------------------------------------------------
-# 3. History Endpoints
-# ------------------------------------------------------------------
 @router.post("/api/history")
 async def create_history_record(entry: ManualHistoryEntry):
     """Manually creates and saves a new analysis record in MongoDB."""

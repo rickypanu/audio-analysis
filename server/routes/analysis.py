@@ -20,14 +20,12 @@ DB_NAME = os.getenv("DB_NAME", "audio_analyzer_db")
 
 mongo_client = motor.motor_asyncio.AsyncIOMotorClient(MONGO_URI)
 db = mongo_client[DB_NAME]
-# Updated collection name to match history route: "history"
 history_collection = db["history"]
 
 # --- 2. Local Storage & Gemini Client Setup ---
 UPLOAD_DIR = "temp_audio_files"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-# Client automatically uses GEMINI_API_KEY from environment
 gemini_client = genai.Client()
 
 
@@ -48,14 +46,12 @@ async def analyze_audio(file: UploadFile = File(...)):
     uploaded_file = None
 
     try:
-        # Step A: Save uploaded file locally in an off-thread executor
         def save_file():
             with open(file_location, "wb") as file_object:
                 shutil.copyfileobj(file.file, file_object)
 
         await asyncio.to_thread(save_file)
 
-        # Step B: Upload file to Gemini File API (Using Async Gemini SDK)
         print(f"Uploading {file.filename} to Gemini...")
         uploaded_file = await gemini_client.aio.files.upload(
             file=file_location
@@ -68,8 +64,8 @@ async def analyze_audio(file: UploadFile = File(...)):
         3. A list of any grammar or pronunciation issues found in their speech.
         """
 
-        # Step C: Generate content with dynamic model fallback
-        models_to_try = ["gemini-2.5-flash", "gemini-2.0-flash"]
+        # Updated to current active model IDs
+        models_to_try = ["gemini-3.5-flash", "gemini-2.5-flash"]
         response = None
         last_exception = None
 
@@ -85,7 +81,7 @@ async def analyze_audio(file: UploadFile = File(...)):
                         response_schema=AudioAnalysisResult,
                     ),
                 )
-                break  # Successfully generated
+                break  
             except errors.ClientError as err:
                 last_exception = err
                 print(f"Issue with {model_name} (Status Code {err.code}): {err.message}")
@@ -103,10 +99,8 @@ async def analyze_audio(file: UploadFile = File(...)):
                 detail=f"Failed to generate analysis: {str(last_exception)}"
             )
 
-        # Step D: Parse structured JSON result
         analysis_data = json.loads(response.text)
 
-        # Step E: Persist result directly to MongoDB "history" collection
         record_doc = {
             "fileName": file.filename,
             "contentType": file.content_type,
@@ -122,7 +116,6 @@ async def analyze_audio(file: UploadFile = File(...)):
             },
         }
 
-        # Native Motor async insert
         inserted_result = await history_collection.insert_one(record_doc)
         record_id = str(inserted_result.inserted_id)
 
@@ -141,7 +134,6 @@ async def analyze_audio(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"Error processing file with Gemini: {str(e)}")
 
     finally:
-        # Step F: Ensure cleanup happens REGARDLESS of success or failure
         file.file.close()
 
         if os.path.exists(file_location):
