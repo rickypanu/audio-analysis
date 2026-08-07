@@ -3,6 +3,7 @@ import shutil
 import json
 import traceback
 import asyncio
+from typing import List, Optional
 from datetime import datetime, timezone
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from pydantic import BaseModel, Field
@@ -14,7 +15,7 @@ import motor.motor_asyncio
 router = APIRouter()
 load_dotenv()
 
-# --- 1. MongoDB Setup (Using Motor AsyncIO) ---
+# --- 1. MongoDB Setup ---
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
 DB_NAME = os.getenv("DB_NAME", "audio_analyzer_db")
 
@@ -29,11 +30,25 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 gemini_client = genai.Client()
 
 
-# --- 3. Pydantic Response Schema ---
+# --- 3. Enhanced Pydantic Response Schema ---
+class GrammarIssue(BaseModel):
+    original_phrase: str = Field(description="The exact spoken text containing the error or non-standard usage.")
+    correction: str = Field(description="The grammatically correct phrasing.")
+    explanation: str = Field(description="Detailed explanation of the rule or pronunciation feedback.")
+
 class AudioAnalysisResult(BaseModel):
-    transcription: str = Field(description="The complete text transcription.")
-    pitch: str = Field(description="Analysis of the speaker's pitch and tone.")
-    grammar_issues_found: str = Field(description="Any grammar mistakes or improvement areas found.")
+    transcription: str = Field(
+        description="The complete, unabridged, verbatim transcription of all spoken text in the audio. Includes filler words, false starts, and exact wording without summarization."
+    )
+    pitch_and_tone_analysis: str = Field(
+        description="A thorough analysis of vocal characteristics including pitch range, variations, tone, pacing (WPM), pauses, inflection, and overall audio clarity."
+    )
+    grammar_and_pronunciation_issues: List[GrammarIssue] = Field(
+        description="An itemized list detailing every grammar error, awkward phrasing, or pronunciation issue identified in the recording."
+    )
+    key_takeaways_and_feedback: str = Field(
+        description="Actionable advice for the speaker on how to improve clarity, delivery, grammar, and articulation based on this recording."
+    )
 
 
 # --- 4. Endpoints ---
@@ -57,14 +72,29 @@ async def analyze_audio(file: UploadFile = File(...)):
             file=file_location
         )
 
+        # Enhanced detailed prompt
         prompt = """
-        You are an expert audio analysis assistant. Please analyze this audio and provide:
-        1. An accurate, verbatim transcription of the English speech.
-        2. A brief analysis of the speaker's vocal pitch (e.g., high, low, standard, energetic, flat).
-        3. A list of any grammar or pronunciation issues found in their speech.
+        You are an elite linguistic expert and speech acoustics analyst. Analyze the provided audio file thoroughly and produce an in-depth, precise evaluation covering the following components:
+
+        1. VERBATIM TRANSCRIPTION:
+           - Provide a complete, exact, word-for-word transcript from start to finish.
+           - Do NOT summarize, shorten, or truncate any part of the spoken text.
+           - Capture all spoken words, including filler words (e.g., 'um', 'uh', 'like'), false starts, and repeated phrases.
+
+        2. PITCH, TONE, AND DELIVERY ANALYSIS:
+           - Analyze the speaker's pitch profile (e.g., dynamic vs. monotone, high/low register, pitch modulation at sentence endings).
+           - Detail their vocal tone (e.g., energetic, authoritative, conversational, hesitant, strained).
+           - Assess speech rhythm, cadence, speaking speed, and significant pauses or hesitations.
+
+        3. GRAMMAR AND PRONUNCIATION ISSUES:
+           - Systematically inspect the audio for every grammatical mistake, non-standard usage, mispronunciation, or awkward phrasing.
+           - Provide the exact original phrase, the corrected version, and a clear explanation for each instance found.
+
+        4. ACTIONABLE FEEDBACK:
+           - Summarize comprehensive, practical suggestions for improving communication, pronunciation, and vocal delivery.
         """
 
-        # Updated to current active model IDs
+        #  ["gemini-2.5-flash", "gemini-2.5-pro"]
         models_to_try = ["gemini-3.5-flash", "gemini-2.5-flash"]
         response = None
         last_exception = None

@@ -2,11 +2,12 @@ import React, { useState, useEffect } from "react";
 import { Share2, Download, FileText } from "lucide-react";
 import { jsPDF } from "jspdf";
 
-export default function ActionToolbar({ 
-  onShare, 
-  onSaveFile, 
+export default function ActionToolbar({
+  onShare,
+  onSaveFile,
   metricsData,
-  shareData = { title: "Diagnostics", text: "Check out this diagnostic output", url: typeof window !== "undefined" ? window.location.href : "" } 
+  fileName = "diagnostics-report",
+  shareData = { title: "Diagnostics", text: "Check out this diagnostic output", url: typeof window !== "undefined" ? window.location.href : "" }
 }) {
   const [isShareSupported, setIsShareSupported] = useState(false);
 
@@ -47,66 +48,92 @@ export default function ActionToolbar({
 
   const createPDFDocument = () => {
     const doc = new jsPDF();
-    const title = metricsData?.title || "Diagnostics Report";
+    const title = metricsData?.title || "Diagnostics Analysis Report";
     const summary = metricsData?.summary || "No transcription summary available.";
     const stats = metricsData?.stats || [];
+    const grammarIssues = metricsData?.grammarIssues || [];
 
     // Header Title
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(18);
-    doc.setTextColor(15, 23, 42); 
+    doc.setFontSize(16);
+    doc.setTextColor(15, 23, 42);
     doc.text(title, 20, 20);
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
-    doc.setTextColor(100, 116, 139); 
+    doc.setTextColor(100, 116, 139);
     doc.text(`Generated on: ${new Date().toLocaleString()}`, 20, 26);
 
     // Divider Line
     doc.setDrawColor(226, 232, 240);
     doc.setLineWidth(0.4);
-    doc.line(20, 32, 190, 32);
+    doc.line(20, 30, 190, 30);
 
-    // Metrics / Key Values Breakdown
-    let cursorY = 42;
+    let cursorY = 40;
+
+    // Acoustic Stats
     if (stats.length > 0) {
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(11);
-      doc.setTextColor(30, 41, 59);
-      doc.text("Telemetry Overview", 20, cursorY);
-      cursorY += 8;
-
-      doc.setFontSize(9);
-      stats.forEach((item, index) => {
-        if (cursorY > 275) {
+      stats.forEach((item) => {
+        if (cursorY > 270) {
           doc.addPage();
           cursorY = 20;
         }
         doc.setFont("helvetica", "bold");
-        doc.setTextColor(51, 65, 85);
-        doc.text(`${index + 1}. ${item.label}:`, 20, cursorY);
-        
+        doc.setFontSize(10);
+        doc.setTextColor(30, 41, 59);
+        doc.text(`${item.label}:`, 20, cursorY);
+        cursorY += 6;
+
         doc.setFont("helvetica", "normal");
-        doc.setTextColor(15, 23, 42);
-        const splitVal = doc.splitTextToSize(String(item.value || "N/A"), 110);
-        doc.text(splitVal, 80, cursorY);
-        
-        cursorY += (splitVal.length * 6) + 4;
+        doc.setFontSize(9);
+        doc.setTextColor(51, 65, 85);
+        const splitVal = doc.splitTextToSize(String(item.value || "N/A"), 170);
+        doc.text(splitVal, 20, cursorY);
+        cursorY += splitVal.length * 5 + 6;
       });
     }
 
-    // Transcription Summary Section
-    cursorY += 5;
-    if (cursorY > 260) {
+    // Structured Grammar Issues
+    if (grammarIssues.length > 0) {
+      if (cursorY > 250) {
+        doc.addPage();
+        cursorY = 20;
+      }
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.setTextColor(30, 41, 59);
+      doc.text("Grammar & Pronunciation Corrections:", 20, cursorY);
+      cursorY += 6;
+
+      grammarIssues.forEach((issue, idx) => {
+        if (cursorY > 260) {
+          doc.addPage();
+          cursorY = 20;
+        }
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9);
+        doc.setTextColor(225, 29, 72);
+        doc.text(`[${idx + 1}] "${issue.original_phrase}" -> "${issue.correction}"`, 20, cursorY);
+        cursorY += 5;
+
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(71, 85, 105);
+        const splitExp = doc.splitTextToSize(`Explanation: ${issue.explanation}`, 165);
+        doc.text(splitExp, 25, cursorY);
+        cursorY += splitExp.length * 5 + 4;
+      });
+    }
+
+    // Transcription Section
+    if (cursorY > 250) {
       doc.addPage();
       cursorY = 20;
     }
-
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
+    doc.setFontSize(10);
     doc.setTextColor(30, 41, 59);
-    doc.text("Decoded Transcript / Summary", 20, cursorY);
-    cursorY += 8;
+    doc.text("Verbatim Transcription:", 20, cursorY);
+    cursorY += 6;
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
@@ -118,37 +145,14 @@ export default function ActionToolbar({
     doc.setFont("helvetica", "italic");
     doc.setFontSize(8);
     doc.setTextColor(148, 163, 184);
-    doc.text("Exported securely via System Dashboard", 20, 285);
+    doc.text("Exported via Audio Diagnostics Platform", 20, 285);
 
     return doc;
   };
 
   const handleGeneratePDF = () => {
     const doc = createPDFDocument();
-    doc.save("diagnostics-report.pdf");
-  };
-
-  const handleSharePDF = async () => {
-    const doc = createPDFDocument();
-    const pdfBlob = doc.output("blob");
-    const file = new File([pdfBlob], "diagnostics-report.pdf", { type: "application/pdf" });
-
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      try {
-        await navigator.share({
-          title: "Diagnostics Report",
-          text: "Here is the compiled diagnostics report PDF.",
-          files: [file],
-        });
-        if (onShare) onShare("pdf");
-      } catch (error) {
-        if (error.name !== "AbortError") console.error("Error sharing PDF:", error);
-      }
-    } else {
-      // Fallback if browser file sharing isn't supported
-      alert("Direct file sharing is not supported on this browser. Downloading PDF instead.");
-      doc.save("diagnostics-report.pdf");
-    }
+    doc.save(`${fileName.toLowerCase().replace(/\s+/g, "-")}.pdf`);
   };
 
   const handleExport = (type) => {
@@ -190,15 +194,6 @@ export default function ActionToolbar({
           >
             Telegram
           </button>
-          {isShareSupported && (
-            <button
-              type="button"
-              onClick={handleSharePDF}
-              className="px-2.5 py-1 text-xs rounded-lg bg-violet-600/10 hover:bg-violet-600/20 text-violet-400 border border-violet-500/20 transition-colors flex items-center gap-1 font-mono"
-            >
-              <FileText size={10} /> Share PDF
-            </button>
-          )}
         </div>
       </div>
 
