@@ -8,11 +8,5 @@ pymongo
 pydantic
 pillow
 slowapi
-numpy
-onnxruntime
-albumentations
-scikit-image
-opencv-python
-insightface
-
+passlib
 email-validator
