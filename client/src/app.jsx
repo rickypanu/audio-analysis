@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Dashboard from './pages/Dashboard';
 import LoginPage from './pages/Login';
 import HistoryDrawer from './components/HistoryDrawer';
@@ -6,11 +6,11 @@ import DetailedAnalysisView from './components/DetailedAnalysisView';
 
 import './index.css';
 
-const API_BASE_URL = 'http://127.0.0.1:8000';
-//  const API_BASE_URL = 'https://audio-analysis-3wya.onrender.com';
+const API_BASE_URL = import.meta.env?.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
   // Audio Analysis State Management
@@ -19,33 +19,65 @@ export default function App() {
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
 
-  // Check existing session on initial load
-  useEffect(() => {
-    const token = localStorage.getItem('authToken');
-    if (token) {
-      setIsAuthenticated(true);
-      fetchHistory();
-    }
-    setLoading(false);
-  }, []);
+  // Helper to safely resolve user ID
+  const getUserId = (userObj) => {
+    if (!userObj) return null;
+    if (typeof userObj === 'string') return userObj;
+    return userObj.user_id || userObj.userId || userObj.id || userObj.username || userObj.email || null;
+  };
 
-  // Fetch History Records from FastAPI Backend
-  const fetchHistory = async () => {
+  const userId = getUserId(currentUser);
+
+  // Stable Fetch function
+  const fetchHistory = useCallback(async (targetUserId) => {
+    const activeUserId = targetUserId || userId;
+    
+    if (!activeUserId) {
+      setHistory([]);
+      return;
+    }
+
     setIsLoadingHistory(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/history`);
-      if (!response.ok) throw new Error('Failed to fetch history');
+      const response = await fetch(
+        `${API_BASE_URL}/api/history?user_id=${encodeURIComponent(activeUserId)}`
+      );
+      if (!response.ok) throw new Error('Failed to fetch user history');
 
       const data = await response.json();
       if (data.status === 'success') {
-        setHistory(data.history);
+        setHistory(data.history || []);
       }
     } catch (error) {
       console.error('Error fetching history:', error);
     } finally {
       setIsLoadingHistory(false);
     }
-  };
+  }, [userId]);
+
+  // 1. Run ONLY ONCE on mount to restore existing session
+  useEffect(() => {
+    const token = localStorage.getItem('token') || localStorage.getItem('authToken');
+    const savedUser = localStorage.getItem('user_profile');
+
+    if (token && savedUser) {
+      try {
+        const parsedUser = JSON.parse(savedUser);
+        setCurrentUser(parsedUser);
+        setIsAuthenticated(true);
+      } catch (e) {
+        console.error('Failed to parse saved user profile:', e);
+      }
+    }
+    setLoading(false);
+  }, []); // <--- Empty array ensures this runs ONLY ONCE
+
+  // 2. Fetch history ONLY when user logs in or userId actually changes
+  useEffect(() => {
+    if (isAuthenticated && userId) {
+      fetchHistory(userId);
+    }
+  }, [isAuthenticated, userId]); // <--- Runs strictly when login state or user ID changes
 
   // Delete Record from MongoDB & State
   const handleDeleteHistory = async (recordId) => {
@@ -56,10 +88,8 @@ export default function App() {
 
       if (!response.ok) throw new Error('Failed to delete record');
 
-      // Optimistically filter item out of local state
       setHistory((prev) => prev.filter((item) => item.id !== recordId));
 
-      // Reset view if active record was deleted
       if (selectedRecord?.id === recordId) {
         setSelectedRecord(null);
       }
@@ -71,19 +101,26 @@ export default function App() {
 
   const handleOpenDrawer = () => {
     setIsDrawerOpen(true);
-    fetchHistory();
+    // Optional: Only fetch if history is currently empty
+    if (history.length === 0 && userId) {
+      fetchHistory(userId);
+    }
   };
 
-  const handleLoginSuccess = (token) => {
-    const sessionValue = typeof token === 'string' ? token : 'true';
-    localStorage.setItem('authToken', sessionValue);
+  const handleLoginSuccess = (userData) => {
+    const user = typeof userData === 'object' ? userData : { username: userData };
+    setCurrentUser(user);
+    localStorage.setItem('user_profile', JSON.stringify(user));
+    localStorage.setItem('authToken', 'true');
     setIsAuthenticated(true);
-    fetchHistory();
   };
 
   const handleLogout = () => {
     localStorage.removeItem('authToken');
+    localStorage.removeItem('token');
+    localStorage.removeItem('user_profile');
     setIsAuthenticated(false);
+    setCurrentUser(null);
     setHistory([]);
     setSelectedRecord(null);
   };
@@ -100,7 +137,6 @@ export default function App() {
     <main className="min-h-screen bg-slate-900 text-slate-100">
       {isAuthenticated ? (
         <div className="min-h-screen flex flex-col">
-          {/* Main Dashboard / Analysis Content */}
           <div className="flex-1 p-6">
             {selectedRecord ? (
               <DetailedAnalysisView
@@ -109,14 +145,14 @@ export default function App() {
               />
             ) : (
               <Dashboard
+                currentUser={currentUser}
                 onLogout={handleLogout}
                 onOpenHistory={handleOpenDrawer}
-                onAnalysisComplete={fetchHistory}
+                onAnalysisComplete={() => fetchHistory(userId)}
               />
             )}
           </div>
 
-          {/* History Drawer Overlay */}
           <HistoryDrawer
             isOpen={isDrawerOpen}
             onClose={() => setIsDrawerOpen(false)}

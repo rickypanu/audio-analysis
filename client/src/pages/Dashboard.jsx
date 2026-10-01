@@ -49,7 +49,8 @@ export default function Dashboard({ currentUser, onLogout }) {
         const validHistory = rawList
           .filter((item) => item && (item.id || item._id))
           .map((item) => {
-            const rawAnalysis = item.data?.analysis || item.analysis || item.data || {};
+            const rawAnalysis =
+              item.data?.analysis || item.analysis || item.data || {};
             return {
               id: item.id || item._id,
               fileName:
@@ -58,7 +59,8 @@ export default function Dashboard({ currentUser, onLogout }) {
                 item.data?.file_info?.filename ||
                 "Audio File",
               fileSize: item.fileSize || item.file_info?.size || null,
-              timestamp: item.timestamp || item.created_at || new Date().toISOString(),
+              timestamp:
+                item.timestamp || item.created_at || new Date().toISOString(),
               data: {
                 ...item.data,
                 analysis: {
@@ -270,7 +272,7 @@ export default function Dashboard({ currentUser, onLogout }) {
     <div className="min-h-screen bg-[#030712] text-slate-100 antialiased font-sans selection:bg-indigo-500/30 selection:text-indigo-200 relative overflow-x-hidden">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_-20%,rgba(99,102,241,0.15),transparent_60%)] pointer-events-none" />
 
-      <div className="relative max-w-4xl mx-auto px-6 py-16 md:py-24 space-y-10">
+      <div className="relative max-w-4xl mx-auto px-6 py-12 md:py-16 space-y-8">
         <Header
           user={currentUser}
           onLogout={onLogout}

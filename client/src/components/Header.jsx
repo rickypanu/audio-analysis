@@ -1,138 +1,108 @@
-import React, { useState, useEffect } from "react";
-import { Sparkles, History, LogOut, User, Flame, Users } from "lucide-react";
+import React from 'react';
 
-export default function Header({
-  user,
-  onLogout,
-  onToggleHistory,
-  historyCount,
-}) {
-  const [greeting, setGreeting] = useState("");
+export default function Header({ user, onLogout, onToggleHistory, historyCount = 0 }) {
+  const extractName = (data) => {
+    if (typeof data === 'string' && data.trim()) return data.trim();
+    if (data && typeof data === 'object') {
+      const candidates = [
+        data.username,
+        data.name,
+        data.email,
+        data.user?.username,
+        data.user?.name,
+        data.user?.email,
+      ];
+      for (const val of candidates) {
+        if (typeof val === 'string' && val.trim()) {
+          return val.trim();
+        }
+      }
+    }
+    return 'User';
+  };
 
-  // Dynamic greeting based on time of day
-  useEffect(() => {
-    const hour = new Date().getHours();
-    if (hour < 12) setGreeting("Good Morning ☀️");
-    else if (hour < 18) setGreeting("Good Afternoon 🌤️");
-    else setGreeting("Good Evening 🌙");
-  }, []);
+  const username = extractName(user);
+  const userAvatarInitial = username.charAt(0).toUpperCase();
 
   return (
-    <header className="relative text-center max-w-4xl mx-auto space-y-8 select-none py-6 font-[family-name:var(--font-inter,'Inter',sans-serif)]">
-      {/* Dynamic Animated Ambient Glows */}
-      <div className="absolute -top-16 left-1/2 -translate-x-1/2 w-[28rem] h-36 bg-gradient-to-r from-indigo-500/20 via-purple-500/20 to-pink-500/20 blur-3xl pointer-events-none rounded-full animate-pulse" />
-      <div className="absolute top-10 left-10 w-24 h-24 bg-purple-500/10 rounded-full blur-2xl pointer-events-none" />
-      <div className="absolute top-10 right-10 w-24 h-24 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
-
-      {/* Top Utility Bar */}
-      <div className="relative flex items-center justify-between gap-3 px-4 py-2.5 rounded-2xl bg-slate-900/50 border border-slate-700/50 text-indigo-400 backdrop-blur-xl shadow-2xl shadow-indigo-950/20">
-        {/* Left Branding & Teammate Badges */}
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2 bg-slate-950/70 px-3 py-1.5 rounded-xl border border-indigo-500/20 shadow-inner">
-            <div className="relative flex items-center justify-center">
-              <Sparkles
-                size={14}
-                className="text-indigo-400 shrink-0 animate-spin"
-                style={{ animationDuration: "6s" }}
-              />
-              <span className="absolute inset-0 bg-indigo-400/30 blur-sm rounded-full" />
-            </div>
-            <span className="font-['JetBrains_Mono',monospace] text-[11px] tracking-wider font-semibold text-slate-300">
-              #WeNStudy
-            </span>
-          </div>
-
-          {/* Friends / Partners Badges */}
-          <div className="hidden sm:flex items-center gap-1.5 font-['JetBrains_Mono',monospace] text-[10px] font-bold">
-            <span className="px-2.5 py-1 rounded-xl bg-purple-500/10 text-purple-300 border border-purple-500/25 shadow-sm flex items-center gap-1 hover:scale-105 transition-transform cursor-default">
-              🐵 #Monkesh
-            </span>
-            <span className="px-2.5 py-1 rounded-xl bg-indigo-500/10 text-indigo-300 border border-indigo-500/25 shadow-sm flex items-center gap-1 hover:scale-105 transition-transform cursor-default">
-              🐼 #Panda
-            </span>
+    <header className="w-full bg-slate-900/90 backdrop-blur-xl border border-slate-800/80 rounded-2xl px-4 py-3.5 md:px-6 shadow-2xl shadow-indigo-950/20 flex items-center justify-between transition-all relative z-30">
+      
+      {/* Left: Brand Identity */}
+      <div className="flex items-center gap-3.5">
+        <div className="relative group">
+          <div className="absolute -inset-0.5 bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 rounded-xl blur opacity-40 group-hover:opacity-75 transition duration-300"></div>
+          <div className="relative w-10 h-10 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-center text-indigo-400 shadow-inner">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+            </svg>
           </div>
         </div>
 
-        {/* Right Actions */}
-        <div className="flex items-center gap-2">
-          {/* History Button */}
-          <button
-            onClick={onToggleHistory}
-            className="group relative inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-950/60 border border-slate-800/80 text-xs text-slate-300 hover:text-white hover:bg-slate-800/80 hover:border-indigo-500/40 transition-all duration-200 active:scale-95 cursor-pointer"
-          >
-            <History
-              size={14}
-              className="text-indigo-400 group-hover:rotate-[-18deg] transition-transform duration-200"
-            />
-            <span className="font-medium">History</span>
-            {historyCount > 0 && (
-              <span className="ml-0.5 px-2 py-0.5 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 text-white text-[10px] font-['JetBrains_Mono',monospace] font-bold shadow-sm">
-                {historyCount}
-              </span>
-            )}
-          </button>
-
-          <div className="h-4 w-[1px] bg-slate-800 mx-0.5" />
-
-          {/* User Badge */}
-          {user && (
-            <div className="hidden md:inline-flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-slate-950/60 border border-slate-800/60 text-xs text-slate-300 font-['JetBrains_Mono',monospace]">
-              <div className="w-5 h-5 rounded-lg bg-gradient-to-br from-indigo-500/30 to-purple-500/30 border border-indigo-500/30 flex items-center justify-center text-indigo-300">
-                <User size={11} />
-              </div>
-              <span className="max-w-[100px] truncate font-medium text-slate-300">
-                {user.name || "Operator"}
-              </span>
-            </div>
-          )}
-
-          {/* Logout Button */}
-          <button
-            onClick={onLogout}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs font-medium text-rose-400 hover:bg-rose-500/20 hover:border-rose-500/40 transition-all duration-200 cursor-pointer active:scale-95"
-            title="Logout"
-          >
-            <LogOut size={13} />
-            <span className="font-semibold hidden sm:inline">Logout</span>
-          </button>
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-sm md:text-base font-extrabold tracking-tight bg-gradient-to-r from-slate-100 via-slate-200 to-indigo-200 bg-clip-text text-transparent">
+              Audio Diagnostic
+            </h1>
+            <span className="hidden sm:inline-block px-2 py-0.5 text-[10px] font-bold tracking-wide uppercase bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded-md">
+              Studio
+            </span>
+          </div>
+       
         </div>
       </div>
 
-      {/* Hero Section */}
-      <div className="space-y-4 pt-3 relative">
-        {/* Subtle Greeting Tag */}
-        <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-pink-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-medium tracking-wide shadow-sm">
-          <Users size={12} className="text-indigo-400" />
-          <span>{greeting}</span>
+      {/* Right Controls */}
+      <div className="flex items-center gap-2.5 sm:gap-3">
+        
+        {/* History Toggle Button */}
+        <button
+          onClick={onToggleHistory}
+          className="relative px-3 py-2 bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 hover:border-slate-600 text-slate-200 rounded-xl text-xs font-medium flex items-center gap-2 transition-all active:scale-95 shadow-sm group"
+          title="View Inspection History"
+        >
+          <svg className="w-4 h-4 text-slate-400 group-hover:text-indigo-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span className="hidden sm:inline">History</span>
+          {historyCount > 0 && (
+            <span className="px-1.5 py-0.5 bg-pink-500/15 text-pink-400 border border-pink-500/30 text-[10px] font-bold rounded-full">
+              {historyCount}
+            </span>
+          )}
+        </button>
+
+        <div className="h-5 w-[1px] bg-slate-800/80 hidden sm:block" />
+
+        {/* User Profile Pill */}
+        <div className="flex items-center gap-2.5 bg-slate-950/80 border border-slate-800/80 pl-1.5 pr-3 py-1.5 rounded-xl shadow-inner">
+          <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-pink-500 via-purple-500 to-indigo-500 p-[1px] shadow-sm">
+            <div className="w-full h-full bg-slate-950 rounded-[7px] flex items-center justify-center text-slate-100 text-xs font-black">
+              {userAvatarInitial}
+            </div>
+          </div>
+          <div className="hidden sm:flex flex-col text-left">
+            <span className="text-[9px] text-slate-500 font-semibold tracking-wider uppercase leading-none mb-0.5">
+              Account
+            </span>
+            <span className="text-xs font-bold text-slate-200 leading-none truncate max-w-[100px]">
+              {username}
+            </span>
+          </div>
         </div>
 
-        {/* Main Title */}
-        <h1 className="text-4xl sm:text-6xl md:text-7xl font-black tracking-tight text-white font-['Plus_Jakarta_Sans',sans-serif] leading-[1.1]">
-          Voice & Speech{" "}
-          <span className="font-['Playfair_Display',serif] italic font-normal text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-indigo-300 to-pink-400 pr-2">
-            Insights
-          </span>
-        </h1>
-
-        {/* Friendly Description */}
-        <p className="text-slate-400 text-sm sm:text-base max-w-xl mx-auto font-normal leading-relaxed tracking-normal font-['Inter',sans-serif]">
-          A dedicated space to analyze communication skills for interviews &
-          personal growth. Built with grit, consistency, and big dreams for{" "}
-          <span className="text-purple-300 font-semibold underline decoration-purple-500/40 underline-offset-4">
-            #Monkesh 🐵
-          </span>{" "}
-          &{" "}
-          <span className="text-indigo-300 font-semibold underline decoration-indigo-500/40 underline-offset-4">
-            #Panda 🐼
-          </span>
-          .
-        </p>
-
-        {/* Motivation Pill */}
-        <div className="pt-1 flex items-center justify-center gap-2 text-xs text-slate-500 font-['JetBrains_Mono',monospace]">
-          <Flame size={13} className="text-amber-400 animate-pulse" />
-          <span>Leveling up every single day</span>
-        </div>
+        {/* Logout Button */}
+        {onLogout && (
+          <button
+            onClick={onLogout}
+            className="p-2 sm:px-3 sm:py-2 bg-slate-800/40 hover:bg-red-500/10 text-slate-400 hover:text-red-400 border border-slate-700/50 hover:border-red-500/20 rounded-xl text-xs font-medium transition-all active:scale-95 flex items-center gap-1.5 group"
+            title="Sign Out"
+          >
+            <svg className="w-4 h-4 text-slate-400 group-hover:text-red-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+            <span className="hidden md:inline">Logout</span>
+          </button>
+        )}
       </div>
     </header>
   );

@@ -1,109 +1,53 @@
-import os
 from datetime import datetime, timezone
-from typing import Optional, List, Dict, Any
-
-from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel, Field, ConfigDict
+from typing import Optional
+from fastapi import APIRouter, HTTPException, status, Query
 from bson import ObjectId
 from bson.errors import InvalidId
-import motor.motor_asyncio
 
-router = APIRouter()
+from database import history_collection
+from schemas import ManualHistoryEntry
 
-# ------------------------------------------------------------------
-# 1. Database Connection Setup
-# ------------------------------------------------------------------
-MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
-DB_NAME = os.getenv("DB_NAME", "audio_analyzer_db")
+history_router = APIRouter(prefix="/api/history", tags=["History"])
 
-client = motor.motor_asyncio.AsyncIOMotorClient(MONGO_URI)
-db = client[DB_NAME]
-
-history_collection = db["history"]
-
-
-# ------------------------------------------------------------------
-# 2. Pydantic Models & Schemas
-# ------------------------------------------------------------------
-class AudioFileInfo(BaseModel):
-    filename: str = "audio_sample.mp3"
-    content_type: str = "audio/mpeg"
-
-
-class AnalysisData(BaseModel):
-    transcription: str = "No transcription available."
-    pitch: str = "N/A"
-    grammar_issues_found: str = "None detected."
-
-
-class ResultPayload(BaseModel):
-    status: str = "success"
-    message: str = "File successfully analyzed."
-    file_info: AudioFileInfo = Field(default_factory=AudioFileInfo)
-    analysis: AnalysisData = Field(default_factory=AnalysisData)
-
-
-class HistoryRecord(BaseModel):
-    id: str = Field(alias="_id")
-    fileName: str = "Untitled Audio"
-    contentType: str = "audio/mpeg"
-    timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    data: ResultPayload
-
-    model_config = ConfigDict(
-        populate_by_name=True,
-        json_encoders={ObjectId: str}
-    )
-
-
-class ManualHistoryEntry(BaseModel):
-    fileName: str
-    contentType: Optional[str] = "audio/mpeg"
-    data: Dict[str, Any]
-
-
-@router.post("/api/history")
+@history_router.post("")
 async def create_history_record(entry: ManualHistoryEntry):
-    """Manually creates and saves a new analysis record in MongoDB."""
     try:
         new_record = {
+            "user_id": entry.user_id,
             "fileName": entry.fileName,
             "contentType": entry.contentType,
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "data": entry.data
         }
-
         result = await history_collection.insert_one(new_record)
-
         return {
             "status": "success",
             "message": "Record created successfully.",
             "record_id": str(result.inserted_id)
         }
-
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create history entry: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to create history entry: {str(e)}")
 
-
-@router.get("/api/history")
-async def get_history():
-    """Retrieves history records from MongoDB with complete fallback sanitization."""
+@history_router.get("")
+async def get_history(user_id: Optional[str] = Query(None)):
     try:
-        records = await history_collection.find().sort("timestamp", -1).to_list(100)
+        # Strict isolation: If no user_id is provided, return an empty list instead of all records
+        if not user_id:
+            return {"status": "success", "history": []}
+
+        query = {"user_id": user_id}
+        records = await history_collection.find(query).sort("timestamp", -1).to_list(100)
         clean_history = []
 
         for doc in records:
             doc_id = str(doc.get("_id", ""))
-            
             data_raw = doc.get("data", {})
             file_info_raw = doc.get("file_info", {}) or data_raw.get("file_info", {})
             analysis_raw = doc.get("analysis", {}) or data_raw.get("analysis", {})
 
             clean_history.append({
                 "id": doc_id,
+                "user_id": doc.get("user_id"),
                 "fileName": doc.get("fileName") or file_info_raw.get("filename") or "Audio Track",
                 "contentType": doc.get("contentType") or file_info_raw.get("content_type") or "audio/mpeg",
                 "timestamp": doc.get("timestamp") or datetime.now(timezone.utc).isoformat(),
@@ -114,49 +58,28 @@ async def get_history():
                         "filename": file_info_raw.get("filename", "audio.mp3"),
                         "content_type": file_info_raw.get("content_type", "audio/mpeg")
                     },
-                    "analysis": {
-                        "transcription": analysis_raw.get("transcription", "No transcription generated."),
-                        "pitch": analysis_raw.get("pitch", "Pitch metrics unavailable."),
-                        "grammar_issues_found": analysis_raw.get("grammar_issues_found", "No issues logged.")
-                    }
+                    "analysis": analysis_raw
                 }
             })
 
         return {"status": "success", "history": clean_history}
-
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to fetch history: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to fetch history: {str(e)}")
 
-
-@router.delete("/api/history/{record_id}")
+@history_router.delete("/{record_id}")
 async def delete_history_item(record_id: str):
-    """Deletes a record from MongoDB by its ObjectId string."""
     try:
         obj_id = ObjectId(record_id)
     except InvalidId:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid record ID format."
-        )
+        raise HTTPException(status_code=400, detail="Invalid record ID format.")
 
     try:
         delete_result = await history_collection.delete_one({"_id": obj_id})
-        
         if delete_result.deleted_count == 0:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Record not found in database."
-            )
+            raise HTTPException(status_code=404, detail="Record not found in database.")
             
         return {"status": "success", "message": "Record deleted successfully."}
-
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error deleting record: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error deleting record: {str(e)}")
