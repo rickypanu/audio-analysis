@@ -9,4 +9,5 @@ pydantic
 pillow
 slowapi
 passlib
+bcrypt
 email-validator
